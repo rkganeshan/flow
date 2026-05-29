@@ -1,0 +1,14 @@
+{
+  "name": "flow-engine",
+  "private": true,
+  "type": "module",
+  "main": "dist/engine/src/cli.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/engine/src/cli.js"
+  },
+  "dependencies": {
+    "bullmq": "^5.16.0",
+    "ioredis": "^5.4.1"
+  }
+}
