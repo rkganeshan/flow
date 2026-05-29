@@ -1,0 +1,121 @@
+name: flow
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: flow-postgres
+    environment:
+      POSTGRES_DB: flow
+      POSTGRES_USER: flow
+      POSTGRES_PASSWORD: flow
+    ports:
+      - "55432:5432"
+    volumes:
+      - flow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow -d flow"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: flow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - flow_redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: flow-mailhog
+    ports:
+      - "8025:8025" # web UI
+      - "1025:1025" # SMTP
+
+  adminer:
+    image: adminer:4
+    container_name: flow-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    container_name: flow-api
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://flow:flow@postgres:5432/flow
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  engine:
+    build:
+      context: ..
+      dockerfile: services/engine/Dockerfile
+    container_name: flow-engine
+    environment:
+      DATABASE_URL: postgresql://flow:flow@postgres:5432/flow
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: services/worker/Dockerfile
+    container_name: flow-worker
+    environment:
+      DATABASE_URL: postgresql://flow:flow@postgres:5432/flow
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      HTTP_NODE_ALLOWED_HOSTS: ""
+      HTTP_NODE_TIMEOUT_MS: 5000
+      HTTP_NODE_MAX_RESPONSE_BYTES: 100000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: services/scheduler/Dockerfile
+    container_name: flow-scheduler
+    environment:
+      DATABASE_URL: postgresql://flow:flow@postgres:5432/flow
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  flow_postgres_data:
+  flow_redis_data:
